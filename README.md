@@ -3,6 +3,10 @@
 
 A responsive Vue.js task management application with data visualization capabilities.
 
+https://bhanu9prakash.github.io/task-manager-vue-js/
+![image](https://github.com/user-attachments/assets/9b0407a5-d255-4a62-b940-8d6450ff0310)
+
+
 ## Features
 
 - **Task Management**
