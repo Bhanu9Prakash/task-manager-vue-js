@@ -1,16 +1,297 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width">
-  <title>replit</title>
-  <link href="style.css" rel="stylesheet" type="text/css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#4a6bff">
+    <title>TaskMaster - Vue Task Management</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-  Hello world
-  <script src="script.js"></script>
-</body>
+    <div id="app">
+        <!-- Mobile Header -->
+        <header class="mobile-header">
+            <div class="brand">
+                <i class="fas fa-check-double"></i>
+                <h1>TaskMaster</h1>
+            </div>
+        </header>
+        
+        <!-- Navigation (will be at bottom on mobile) -->
+        <nav class="navbar">
+            <div class="brand">
+                <i class="fas fa-check-double"></i>
+                <h1>TaskMaster</h1>
+            </div>
+            <div class="nav-links">
+                <a @click="currentRoute = 'dashboard'" :class="{ active: currentRoute === 'dashboard' }">
+                    <i class="fas fa-chart-pie"></i> Dashboard
+                </a>
+                <a @click="currentRoute = 'tasks'" :class="{ active: currentRoute === 'tasks' }">
+                    <i class="fas fa-tasks"></i> Tasks
+                </a>
+            </div>
+        </nav>
 
+        <!-- Main Content -->
+        <main>
+            <!-- Dashboard View -->
+            <section v-if="currentRoute === 'dashboard'" class="dashboard">
+                <h2>Dashboard</h2>
+                <div class="stats-cards">
+                    <div class="stat-card">
+                        <h3>Total Tasks</h3>
+                        <p class="stat-number">{{ tasks.length }}</p>
+                        <i class="fas fa-clipboard-list"></i>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Completed</h3>
+                        <p class="stat-number">{{ completedTasks.length }}</p>
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Pending</h3>
+                        <p class="stat-number">{{ pendingTasks.length }}</p>
+                        <i class="fas fa-hourglass-half"></i>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Overdue</h3>
+                        <p class="stat-number">{{ overdueTasks.length }}</p>
+                        <i class="fas fa-exclamation-circle"></i>
+                    </div>
+                </div>
+
+                <div class="charts-container">
+                    <div class="chart-wrapper">
+                        <h3>Task Status</h3>
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                    <div class="chart-wrapper">
+                        <h3>Tasks by Category</h3>
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="recent-tasks">
+                    <h3>Recently Added Tasks</h3>
+                    <ul class="task-list">
+                        <li v-for="task in recentTasks" :key="task.id" class="task-item">
+                            <div class="task-status">
+                                <span :class="['priority', task.priority]"></span>
+                                <span class="checkbox" :class="{ checked: task.completed }" 
+                                      @click="toggleTaskStatus(task.id)">
+                                    <i v-if="task.completed" class="fas fa-check"></i>
+                                </span>
+                            </div>
+                            <div class="task-content">
+                                <h4 :class="{ completed: task.completed }">{{ task.title }}</h4>
+                                <div class="task-meta">
+                                    <span class="category">{{ task.category }}</span>
+                                    <span v-if="task.dueDate" class="due-date" :class="{ overdue: isOverdue(task) }">
+                                        <i class="far fa-calendar"></i> {{ formatDate(task.dueDate) }}
+                                    </span>
+                                </div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Tasks View -->
+            <section v-if="currentRoute === 'tasks'" class="tasks-view">
+                <div class="tasks-header">
+                    <h2>My Tasks</h2>
+                    <button @click="openAddTaskModal" class="btn-primary">
+                        <i class="fas fa-plus"></i> New Task
+                    </button>
+                </div>
+
+                <div class="filters">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" v-model="searchQuery" placeholder="Search tasks...">
+                    </div>
+                    
+                    <div class="filter-options">
+                        <select v-model="categoryFilter">
+                            <option value="">All Categories</option>
+                            <option v-for="category in categories" :value="category">{{ category }}</option>
+                        </select>
+                        
+                        <select v-model="statusFilter">
+                            <option value="">All Status</option>
+                            <option value="completed">Completed</option>
+                            <option value="pending">Pending</option>
+                        </select>
+                        
+                        <select v-model="priorityFilter">
+                            <option value="">All Priorities</option>
+                            <option value="low">Low</option>
+                            <option value="medium">Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                </div>
+
+                <transition-group name="task-list" tag="ul" class="task-list">
+                    <li v-for="task in filteredTasks" :key="task.id" class="task-item">
+                        <div class="task-status">
+                            <span :class="['priority', task.priority]"></span>
+                            <span class="checkbox" :class="{ checked: task.completed }" 
+                                  @click="toggleTaskStatus(task.id)">
+                                <i v-if="task.completed" class="fas fa-check"></i>
+                            </span>
+                        </div>
+                        <div class="task-content" @click="openTaskDetail(task)">
+                            <h4 :class="{ completed: task.completed }">{{ task.title }}</h4>
+                            <p class="task-description">{{ truncateText(task.description, 60) }}</p>
+                            <div class="task-meta">
+                                <span class="category">{{ task.category }}</span>
+                                <span v-if="task.dueDate" class="due-date" :class="{ overdue: isOverdue(task) }">
+                                    <i class="far fa-calendar"></i> {{ formatDate(task.dueDate) }}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="task-actions">
+                            <button @click.stop="openEditTaskModal(task)" class="btn-icon">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button @click.stop="deleteTask(task.id)" class="btn-icon delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </li>
+                </transition-group>
+
+                <div v-if="filteredTasks.length === 0" class="empty-state">
+                    <i class="fas fa-clipboard-list"></i>
+                    <p>No tasks match your filters. Try adjusting your search or filters.</p>
+                </div>
+            </section>
+
+            <!-- Task Detail View -->
+            <section v-if="currentRoute === 'taskDetail'" class="task-detail">
+                <div class="detail-header">
+                    <button @click="currentRoute = 'tasks'" class="btn-back">
+                        <i class="fas fa-arrow-left"></i> Back to Tasks
+                    </button>
+                    <div class="task-actions">
+                        <button @click="openEditTaskModal(currentTask)" class="btn-primary">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button @click="deleteTask(currentTask.id)" class="btn-danger">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+
+                <div class="detail-content">
+                    <div class="detail-status">
+                        <span :class="['priority-indicator', currentTask.priority]">
+                            {{ capitalizeFirst(currentTask.priority) }} Priority
+                        </span>
+                        <span :class="['status-indicator', currentTask.completed ? 'completed' : 'pending']">
+                            {{ currentTask.completed ? 'Completed' : 'Pending' }}
+                        </span>
+                    </div>
+
+                    <h2>{{ currentTask.title }}</h2>
+                    
+                    <div class="detail-meta">
+                        <span class="category-badge">{{ currentTask.category }}</span>
+                        <span v-if="currentTask.dueDate" class="due-date" 
+                              :class="{ overdue: isOverdue(currentTask) }">
+                            <i class="far fa-calendar"></i> Due: {{ formatDate(currentTask.dueDate) }}
+                        </span>
+                    </div>
+
+                    <div class="description">
+                        <h3>Description</h3>
+                        <p>{{ currentTask.description || 'No description provided.' }}</p>
+                    </div>
+
+                    <div class="detail-footer">
+                        <button @click="toggleTaskStatus(currentTask.id)" 
+                                :class="['btn-status', currentTask.completed ? 'btn-completed' : 'btn-pending']">
+                            <i :class="currentTask.completed ? 'fas fa-times-circle' : 'fas fa-check-circle'"></i>
+                            {{ currentTask.completed ? 'Mark as Pending' : 'Mark as Completed' }}
+                        </button>
+                        <div class="created-at">
+                            Created: {{ formatDate(currentTask.createdAt) }}
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Task Modal (Add/Edit) -->
+        <div class="modal" v-if="isTaskModalOpen">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>{{ isEditMode ? 'Edit Task' : 'Add New Task' }}</h3>
+                    <button class="close-modal" @click="closeTaskModal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <form @submit.prevent="saveTask">
+                        <div class="form-group">
+                            <label for="taskTitle">Title</label>
+                            <input type="text" id="taskTitle" v-model="taskForm.title" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="taskDescription">Description</label>
+                            <textarea id="taskDescription" v-model="taskForm.description" rows="3"></textarea>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="taskCategory">Category</label>
+                                <select id="taskCategory" v-model="taskForm.category" required>
+                                    <option v-for="category in categories" :value="category">{{ category }}</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="taskPriority">Priority</label>
+                                <select id="taskPriority" v-model="taskForm.priority" required>
+                                    <option value="low">Low</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="high">High</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="taskDueDate">Due Date</label>
+                            <input type="date" id="taskDueDate" v-model="taskForm.dueDate">
+                        </div>
+
+                        <div class="form-group checkbox-group">
+                            <label class="checkbox-container">
+                                <input type="checkbox" v-model="taskForm.completed">
+                                <span class="checkmark"></span>
+                                Mark as completed
+                            </label>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn-secondary" @click="closeTaskModal">Cancel</button>
+                            <button type="submit" class="btn-primary">{{ isEditMode ? 'Update' : 'Add' }} Task</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Vue and Chart.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    
+    <!-- Load App JS -->
+    <script src="script.js"></script>
+</body>
 </html>
